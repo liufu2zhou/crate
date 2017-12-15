@@ -38,26 +38,25 @@ public interface UserManager extends UserLookup {
      * creates a user
      *
      * @param userName name of the user to create
-     * @param secureHash the password-hash consisting of a SHA-512 hash, salt and num. iterations
      * @return a future which returns the number of rows when the User is created
      */
-    CompletableFuture<Long> createUser(String userName, @Nullable SecureHash secureHash);
+    CompletableFuture<Long> createUser(String userName, @Nullable SecureHash hashedPw);
 
     /**
      * deletes a user
-     * @param userName name of the user to drop
-     * @return a future which returns the number of rows when the User is dropped
+     * @param userName the user to drop
+     * @return 1L if dropped, 0L if not found and {@code suppressNotFoundError} is true. Otherwise a failure
      */
-    CompletableFuture<Long> dropUser(String userName, boolean ifExists);
+    CompletableFuture<Long> dropUser(String userName, boolean suppressNotFoundError);
 
     /**
      * Modifies a user
      *
-     * @param userName name of the existing user to modify
-     * @param secureHash the password-hash consisting of a SHA-512 hash, salt and num. iterations
-     * @return a future which returns the number of rows when the User is modified
+     * @param userName of the existing user to modify
+     * @param newHashedPw new password; if null the password is removed from the user
+     * @return a future with 1L if the user has been updated; otherwise a failed future with the failure reason.
      */
-    CompletableFuture<Long> alterUser(String userName, @Nullable SecureHash secureHash);
+    CompletableFuture<Long> alterUser(String userName, @Nullable SecureHash newHashedPw);
 
     /**
      * Apply given list of {@link Privilege}s for each given user
