@@ -35,26 +35,31 @@ import java.util.concurrent.CompletableFuture;
 public interface UserManager extends UserLookup {
 
     /**
-     * creates a user
+     * Create a user.
+     * This never raises but always returns a failed future in error cases.
      *
      * @param userName name of the user to create
-     * @return a future which returns the number of rows when the User is created
+     * @return 1 if the user was created, otherwise a failed future.
      */
     CompletableFuture<Long> createUser(String userName, @Nullable SecureHash hashedPw);
 
     /**
-     * deletes a user
+     * Delete a user.
+     * This never raises but always returns a failed future in error cases.
+     *
      * @param userName the user to drop
-     * @return 1L if dropped, 0L if not found and {@code suppressNotFoundError} is true. Otherwise a failure
+     * @return 1 if dropped, 0 if not found and {@code suppressNotFoundError} is true.
+     *         Otherwise a failure
      */
     CompletableFuture<Long> dropUser(String userName, boolean suppressNotFoundError);
 
     /**
-     * Modifies a user
+     * Modifies a user.
+     * This never raises but always returns a failed future in error cases.
      *
      * @param userName of the existing user to modify
      * @param newHashedPw new password; if null the password is removed from the user
-     * @return a future with 1L if the user has been updated; otherwise a failed future with the failure reason.
+     * @return 1 if the user has been updated, otherwise a failed future.
      */
     CompletableFuture<Long> alterUser(String userName, @Nullable SecureHash newHashedPw);
 
