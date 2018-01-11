@@ -23,10 +23,8 @@
 package io.crate.operation.collect;
 
 import io.crate.breaker.RamAccountingContext;
-import io.crate.core.collections.TreeMapBuilder;
 import io.crate.executor.transport.TransportActionProvider;
 import io.crate.jobs.JobContextService;
-import io.crate.metadata.Routing;
 import io.crate.operation.collect.collectors.RemoteCollector;
 import io.crate.planner.distribution.DistributionInfo;
 import io.crate.execution.dsl.phases.RoutedCollectPhase;
@@ -36,11 +34,10 @@ import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.inject.Singleton;
+import org.elasticsearch.indices.IndicesService;
+import org.elasticsearch.threadpool.ThreadPool;
+import io.crate.operation.collect.collectors.ShardStateAwareRemoteCollector;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -50,18 +47,23 @@ import java.util.UUID;
 @Singleton
 public class RemoteCollectorFactory {
 
-    private static final int SENDER_PHASE_ID = 0;
     private final ClusterService clusterService;
     private final JobContextService jobContextService;
     private final TransportActionProvider transportActionProvider;
+    private final ThreadPool threadPool;
+    private final IndicesService indicesService;
 
     @Inject
     public RemoteCollectorFactory(ClusterService clusterService,
                                   JobContextService jobContextService,
-                                  TransportActionProvider transportActionProvider) {
+                                  TransportActionProvider transportActionProvider,
+                                  IndicesService indicesService,
+                                  ThreadPool threadPool) {
         this.clusterService = clusterService;
         this.jobContextService = jobContextService;
         this.transportActionProvider = transportActionProvider;
+        this.indicesService = indicesService;
+        this.threadPool = threadPool;
     }
 
     /**
@@ -73,47 +75,23 @@ public class RemoteCollectorFactory {
     public CrateCollector.Builder createCollector(String index,
                                                   Integer shardId,
                                                   RoutedCollectPhase collectPhase,
-                                                  final RamAccountingContext ramAccountingContext) {
+                                                  JobCollectContext jobCollectContext,
+                                                  ShardCollectorProviderFactory shardCollectorProviderFactory) {
         final UUID childJobId = UUID.randomUUID(); // new job because subContexts can't be merged into an existing job
 
-        IndexShardRoutingTable shardRoutings = clusterService.state().routingTable().shardRoutingTable(index, shardId);
-        // for update operations primaryShards must be used
-        // (for others that wouldn't be the case, but at this point it is not easily visible which is the case)
-        ShardRouting shardRouting = shardRoutings.primaryShard();
-
-        final String remoteNodeId = shardRouting.currentNodeId();
-        assert remoteNodeId != null : "primaryShard not assigned :(";
-        final String localNodeId = clusterService.localNode().getId();
-        final RoutedCollectPhase newCollectPhase = createNewCollectPhase(childJobId, collectPhase, index, shardId, remoteNodeId);
-
-        return consumer -> new RemoteCollector(
+        return consumer -> new ShardStateAwareRemoteCollector(
             childJobId,
-            localNodeId,
-            remoteNodeId,
+            index,
+            shardId,
             transportActionProvider.transportJobInitAction(),
             transportActionProvider.transportKillJobsNodeAction(),
             jobContextService,
-            ramAccountingContext,
+            jobCollectContext,
             consumer,
-            newCollectPhase);
-    }
-
-    private RoutedCollectPhase createNewCollectPhase(
-        UUID childJobId, RoutedCollectPhase collectPhase, String index, Integer shardId, String nodeId) {
-
-        Routing routing = new Routing(TreeMapBuilder.<String, Map<String, List<Integer>>>newMapBuilder().put(nodeId,
-            TreeMapBuilder.<String, List<Integer>>newMapBuilder().put(index, Collections.singletonList(shardId)).map()).map());
-        return new RoutedCollectPhase(
-            childJobId,
-            SENDER_PHASE_ID,
-            collectPhase.name(),
-            routing,
-            collectPhase.maxRowGranularity(),
-            collectPhase.toCollect(),
-            new ArrayList<>(Projections.shardProjections(collectPhase.projections())),
-            collectPhase.whereClause(),
-            DistributionInfo.DEFAULT_BROADCAST,
-            null
-        );
+            collectPhase,
+            clusterService,
+            threadPool,
+            indicesService,
+            shardCollectorProviderFactory);
     }
 }
