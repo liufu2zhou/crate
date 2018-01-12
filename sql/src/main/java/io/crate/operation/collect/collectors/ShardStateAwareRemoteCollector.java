@@ -131,10 +131,13 @@ public class ShardStateAwareRemoteCollector implements CrateCollector {
                 if (collectorKilled == false) {
                     collector = new RemoteCollector(jobId, localNode, remoteNode, transportJobAction, transportKillJobsNodeAction,
                         jobContextService, jobCollectContext.queryPhaseRamAccountingContext(), consumer, remoteCollectPhase);
-                    collector.doCollect();
                 } else {
                     consumer.accept(null, new InterruptedException());
                 }
+            }
+            // collect outside the synchronized block
+            if (collector != null) {
+                collector.doCollect();
             }
         } else {
             if (shardRouting.started() == true) {
@@ -154,10 +157,13 @@ public class ShardStateAwareRemoteCollector implements CrateCollector {
                                     collector = shardCollectorProviderFactory.create(indexShards.getShard(shardId)).
                                         getCollectorBuilder(originalCollectPhase, scrollRequired, jobCollectContext).
                                         build(consumer);
-                                    collector.doCollect();
                                 } else {
                                     consumer.accept(null, new InterruptedException());
                                 }
+                            }
+                            // collect outside the synchronized block
+                            if (collector != null) {
+                                collector.doCollect();
                             }
                         } catch (Exception e) {
                             consumer.accept(null, e);
@@ -216,10 +222,10 @@ public class ShardStateAwareRemoteCollector implements CrateCollector {
     @Override
     public void kill(@Nullable Throwable throwable) {
         synchronized (killLock) {
+            collectorKilled = true;
             if (collector != null) {
                 collector.kill(throwable);
             }
-            collectorKilled = true;
         }
     }
 }
