@@ -7,3 +7,5 @@ Developer Docs
 - `Test cheatsheet <tests.rst>`_
 - `Benchmarks <benchmarks.rst>`_
 - `Release workflow <release.rst>`_
+
+- `Architecture <architecture.rst>`_
